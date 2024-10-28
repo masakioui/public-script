@@ -26,13 +26,22 @@ echo "$apis" | jq -c '.items[]' | while IFS= read -r api; do
     else
       echo "Failed to export details of $api_name (ID: $api_id)"
     fi
-    
-    # Export API as Swagger (OpenAPI) JSON
-    aws apigateway get-export --rest-api-id "$api_id" --stage-name "prod" --export-type "swagger" "swagger-$sanitized_name.json"
-    if [ $? -eq 0 ]; then
-      echo "Exported Swagger (OpenAPI) definition of $api_name (ID: $api_id) to swagger-$sanitized_name.json"
+
+    # Fetch the stages for the current API
+    stages=$(aws apigateway get-stages --rest-api-id "$api_id" --query "item[0].stageName" --output text)
+
+    # Check if any stages were found
+    if [ -n "$stages" ] && [ "$stages" != "None" ]; then
+      stage_name=$(echo "$stages" | head -n 1)
+      # Export API as Swagger (OpenAPI) JSON
+      aws apigateway get-export --rest-api-id "$api_id" --stage-name "$stage_name" --export-type "swagger" "export-swagger-$sanitized_name.json"
+      if [ $? -eq 0 ]; then
+        echo "Exported Swagger (OpenAPI) definition of $api_name (ID: $api_id) from stage $stage_name to export-swagger-$sanitized_name.json"
+      else
+        echo "Failed to export Swagger definition of $api_name (ID: $api_id) from stage $stage_name"
+      fi
     else
-      echo "Failed to export Swagger definition of $api_name (ID: $api_id)"
+      echo "No stages found for $api_name (ID: $api_id), unable to export Swagger definition"
     fi
   fi
 done

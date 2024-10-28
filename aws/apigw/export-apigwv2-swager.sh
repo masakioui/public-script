@@ -34,13 +34,22 @@ echo "$apis" | jq -c '.Items[]' | while IFS= read -r api; do
       echo "Failed to export details of $api_name (ID: $api_id, Type: $api_protocol_type)"
     fi
 
-    # Export Swagger (OpenAPI) definition
-    export_file="export-swagger-$sanitized_name.json"
-    aws apigatewayv2 export-api --api-id "$api_id" --output-file "$export_file" --include-extensions --export-type "oas30" --stage-name "default"
-    if [ $? -eq 0 ]; then
-      echo "Exported Swagger (OpenAPI) definition of $api_name (ID: $api_id, Type: $api_protocol_type) to $export_file"
+    # Fetch the stages for the current API
+    stages=$(aws apigatewayv2 get-stages --api-id "$api_id" --query "Items[].StageName" --output text)
+
+    # Check if any stages were found
+    if [ -n "$stages" ] && [ "$stages" != "None" ]; then
+      stage_name=$(echo "$stages" | head -n 1)
+      # Export Swagger (OpenAPI) definition
+      export_file="export-swagger-$sanitized_name.json"
+      aws apigatewayv2 export-api --api-id "$api_id" --stage-name "$stage_name" --output-type "JSON" --specification "OAS30" "$export_file"
+      if [ $? -eq 0 ]; then
+        echo "Exported Swagger (OpenAPI) definition of $api_name (ID: $api_id, Type: $api_protocol_type) from stage $stage_name to $export_file"
+      else
+        echo "Failed to export Swagger definition of $api_name (ID: $api_id, Type: $api_protocol_type) from stage $stage_name"
+      fi
     else
-      echo "Failed to export Swagger definition of $api_name (ID: $api_id, Type: $api_protocol_type)"
+      echo "No valid stages found for $api_name (ID: $api_id), unable to export Swagger definition"
     fi
   fi
 done
